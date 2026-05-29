@@ -1,16 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Filter, LocateFixed, Search } from "lucide-react";
 import { ShopCard } from "@/components/shop-card";
-import { shops } from "@/lib/mock-data";
+import { listPublicShops } from "@/lib/firebase/firestore";
+import type { Shop } from "@/lib/types";
 
 const statuses = ["all", "healthy", "needs-cleaning", "offline"] as const;
 
 export default function PublicSearchPage() {
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
+
+  useEffect(() => {
+    document.title = "AirLoo | Public Toilet Monitor";
+  }, []);
+
+  useEffect(() => {
+    listPublicShops()
+      .then(setShops)
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = query.toLowerCase().trim();
@@ -24,7 +37,9 @@ export default function PublicSearchPage() {
       const matchesStatus = status === "all" || shop.status === status;
       return matchesQuery && matchesStatus;
     });
-  }, [query, status]);
+  }, [query, status, shops]);
+
+  const totalDevices = shops.reduce((total, shop) => total + shop.sensors.length, 0);
 
   return (
     <main>
@@ -39,8 +54,14 @@ export default function PublicSearchPage() {
         </div>
         <div className="quick-panel">
           <strong>Current coverage</strong>
-          <span>{shops.length} shops</span>
-          <span>{shops.reduce((total, shop) => total + shop.sensors.length, 0)} devices</span>
+          {loading ? (
+            <span>Loading...</span>
+          ) : (
+            <>
+              <span>{shops.length} shops</span>
+              <span>{totalDevices} devices</span>
+            </>
+          )}
           <Link href="/join">Add your shop</Link>
         </div>
       </section>
@@ -70,9 +91,13 @@ export default function PublicSearchPage() {
         </div>
 
         <div className="shop-grid">
-          {filtered.map((shop) => (
-            <ShopCard key={shop.id} shop={shop} />
-          ))}
+          {loading
+            ? Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="shop-card" style={{ height: 200, opacity: 0.4 }}>
+                  Loading...
+                </div>
+              ))
+            : filtered.map((shop) => <ShopCard key={shop.id} shop={shop} />)}
         </div>
       </section>
     </main>

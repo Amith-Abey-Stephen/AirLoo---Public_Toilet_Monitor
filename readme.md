@@ -4,18 +4,28 @@
 
 This repository now includes a Next.js app for the three AirLoo web flows:
 
-- Public search: visitors can search shops/locations and open a shop sensor dashboard.
-- Shop owner console: approved owners log in, review their shop details, and manage sensor/location data.
-- Admin console: the AirLoo team can see and manage all shops, owners, devices, and alerts.
+- **Public search** — visitors can search shops/locations and open a shop sensor dashboard.
+- **Shop owner console** — approved owners log in, review their shop details, and manage sensor/location data.
+- **Admin console** — the AirLoo team can see and manage all shops, owners, devices, and alerts.
 
-Run it locally:
+### Quick start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Create `.env.local` from `.env.local.example` and fill in the Firebase web app values. The join form writes onboarding requests to Firestore and can also create documents for the Firebase Trigger Email extension using `AIRLOO_JOIN_EMAIL`.
+Create `.env.local` from `.env.local.example` and fill in your Firebase web app values.
+
+### Auth
+
+- Email/password login on `/admin` and `/owner`
+- **Google Sign-In** (one-click via Firebase) available on both login pages
+- Sessions persist across page refreshes and expire after **30 minutes** of inactivity
+
+### Data
+
+All shops, sensors, and events are fetched live from **Firestore** (no mock/hardcoded data). The `/api/join` endpoint writes onboarding requests to Firestore and can trigger the Firebase Trigger Email extension.
 
 ## Overview
 
@@ -242,8 +252,6 @@ The monitoring dashboard is built with **Next.js** (React / TypeScript) and uses
 
 Firebase credentials are configured via environment variables (never committed to the repo).  
 
-Create a `.env.local` file from `.env.local.example` and fill in your Firebase web app values:
-
 ```bash
 cp .env.local.example .env.local
 ```
@@ -268,6 +276,8 @@ npm run dev       # local development
 ```
 
 The app can be deployed to **Vercel** or exported as a static site.
+
+> **Note:** Firebase **Google Sign-In** must be enabled in the Firebase Console (Authentication → Sign-in method → Google). Email/password sign-in works out of the box.
 
 ---
 

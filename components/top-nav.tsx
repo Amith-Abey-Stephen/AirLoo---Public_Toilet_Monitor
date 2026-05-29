@@ -1,12 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
-import { LayoutDashboard, Shield, Store, Waves } from "lucide-react";
+import { LayoutDashboard, Shield, Store } from "lucide-react";
 
 export function TopNav() {
   return (
     <header className="top-nav">
       <Link className="brand" href="/">
         <span className="brand-mark">
-          <Waves size={22} />
+          <Image src="/logo.png" alt="AirLoo" width={22} height={22} />
         </span>
         <span>
           <strong>AirLoo</strong>

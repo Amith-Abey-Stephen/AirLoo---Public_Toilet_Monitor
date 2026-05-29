@@ -1,25 +1,57 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, MapPin, ShieldCheck } from "lucide-react";
 import { SensorGrid } from "@/components/sensor-grid";
 import { StatusPill } from "@/components/status-pill";
-import { getShop, shops } from "@/lib/mock-data";
+import { getPublicShop } from "@/lib/firebase/firestore";
+import type { Shop } from "@/lib/types";
 
-export function generateStaticParams() {
-  return shops.map((shop) => ({ shopId: shop.id }));
-}
+export default function ShopDashboardPage() {
+  const params = useParams();
+  const shopId = params.shopId as string;
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default async function ShopDashboardPage({
-  params,
-}: {
-  params: Promise<{ shopId: string }>;
-}) {
-  const { shopId } = await params;
-  const shop = getShop(shopId);
-  if (!shop) notFound();
+  useEffect(() => {
+    document.title = "Shop Dashboard | AirLoo";
+  }, []);
+
+  useEffect(() => {
+    getPublicShop(shopId)
+      .then((shop) => {
+        setShop(shop);
+        if (shop) {
+          document.title = `${shop.name} | AirLoo`;
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [shopId]);
+
+  if (loading) {
+    return (
+      <main className="detail-page">
+        <p className="toast">Loading...</p>
+      </main>
+    );
+  }
+
+  if (!shop) {
+    return (
+      <main className="detail-page">
+        <h1>Shop not found</h1>
+        <Link className="back-link" href="/">
+          <ArrowLeft size={17} />
+          Search results
+        </Link>
+      </main>
+    );
+  }
 
   const sensor = shop.sensors[0];
-  const lastEvent = new Date(sensor.lastEventAt);
+  const lastEvent = sensor?.lastEventAt ? new Date(sensor.lastEventAt) : null;
 
   return (
     <main className="detail-page">
@@ -46,10 +78,10 @@ export default async function ShopDashboardPage({
             <h2>Sensor dashboard</h2>
             <span>
               <Clock size={16} />
-              {lastEvent.toLocaleString("en-IN")}
+              {lastEvent ? lastEvent.toLocaleString("en-IN") : "Waiting for first event"}
             </span>
           </div>
-          <SensorGrid reading={sensor} />
+          {sensor ? <SensorGrid reading={sensor} /> : <p>No sensor data available.</p>}
         </div>
 
         <aside className="side-panel">
@@ -62,12 +94,12 @@ export default async function ShopDashboardPage({
             </div>
             <div>
               <dt>Device</dt>
-              <dd>{sensor.deviceId}</dd>
+              <dd>{sensor?.deviceId ?? "--"}</dd>
             </div>
             <div>
               <dt>Door cycles</dt>
               <dd>
-                {sensor.openCount} opens / {sensor.closeCount} closes
+                {sensor ? `${sensor.openCount} opens / ${sensor.closeCount} closes` : "--"}
               </dd>
             </div>
           </dl>

@@ -33,10 +33,13 @@ export type Shop = {
 };
 
 export type JoinRequest = {
+  id?: string;
   name: string;
   email: string;
   phone: string;
   shopName: string;
   location: string;
   message: string;
+  status?: "new" | "reviewing" | "approved" | "rejected";
+  createdAt?: unknown;
 };

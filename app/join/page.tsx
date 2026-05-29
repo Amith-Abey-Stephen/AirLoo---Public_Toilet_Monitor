@@ -1,10 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useEffect, useState } from "react";
+import { FormEvent } from "react";
 import { Send } from "lucide-react";
 
 export default function JoinPage() {
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    document.title = "Join AirLoo | Public Toilet Monitor";
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
