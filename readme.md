@@ -1,5 +1,22 @@
 # Smart Public Toilet Monitoring System
 
+## Next.js Web App
+
+This repository now includes a Next.js app for the three AirLoo web flows:
+
+- Public search: visitors can search shops/locations and open a shop sensor dashboard.
+- Shop owner console: approved owners log in, review their shop details, and manage sensor/location data.
+- Admin console: the AirLoo team can see and manage all shops, owners, devices, and alerts.
+
+Run it locally:
+
+```bash
+npm install
+npm run dev
+```
+
+Create `.env.local` from `.env.local.example` and fill in the Firebase web app values. The join form writes onboarding requests to Firestore and can also create documents for the Firebase Trigger Email extension using `AIRLOO_JOIN_EMAIL`.
+
 ## Overview
 
 The Smart Public Toilet Monitoring System is an IoT-enabled sanitation management solution designed to improve hygiene standards, maintenance efficiency, and user experience in public restroom facilities.
@@ -129,9 +146,9 @@ Sensor data is uploaded through Wi-Fi to a dashboard for monitoring and analytic
 
 ### Software
 - Arduino IDE  
-- HTML / CSS / JavaScript Dashboard  
+- Next.js / React / TypeScript Web App  
 - Firebase / Cloud Database  
-- GitHub Actions (CI/CD deployment)  
+- Vercel / Static Export Deployment  
 
 ---
 
@@ -219,21 +236,38 @@ The Firebase project ID is configured directly in `Firebase/Firebase.ino`:
 String projectId = "your-firebase-project-id";
 ```
 
-### Dashboard
+### Web App
 
-The monitoring dashboard (`dashboard/dashboard.html`) is a static frontend hosted on **GitHub Pages**.  
+The monitoring dashboard is built with **Next.js** (React / TypeScript) and uses Firebase for auth and data.
 
-Firebase credentials are injected at deploy time via **GitHub Actions** (never committed to the repo).  
+Firebase credentials are configured via environment variables (never committed to the repo).  
 
-Set the following **repository secrets** in `Settings → Secrets and variables → Actions`:
+Create a `.env.local` file from `.env.local.example` and fill in your Firebase web app values:
 
-| Secret | Value |
-|--------|-------|
-| `FIREBASE_PROJECT_ID` | Your Firebase project ID |
-| `FIREBASE_API_KEY` | Your Firebase API key |
-| `FIRESTORE_COLLECTION` | Collection name (e.g. `events`) |
+```bash
+cp .env.local.example .env.local
+```
 
-Every push to `main` triggers a deployment that injects these secrets into `dashboard/env.js` and publishes to GitHub Pages.
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase API key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID |
+| `NEXT_PUBLIC_ADMIN_EMAILS` | Comma-separated emails allowed in `/admin` |
+| `AIRLOO_JOIN_EMAIL` | Sender email for join requests |
+| `FIREBASE_MAIL_COLLECTION` | Firestore collection for Trigger Email |
+
+Build and deploy:
+
+```bash
+npm run build     # production build
+npm run dev       # local development
+```
+
+The app can be deployed to **Vercel** or exported as a static site.
 
 ---
 

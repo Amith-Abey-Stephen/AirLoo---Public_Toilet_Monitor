@@ -1,2 +1,9 @@
 Firebase/secrets.h
-dashboard/env.js
+.env*.local
+.next/
+node_modules/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
