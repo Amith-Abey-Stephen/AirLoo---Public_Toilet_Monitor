@@ -8,7 +8,7 @@ import { SensorGrid } from "@/components/sensor-grid";
 import { StatusPill } from "@/components/status-pill";
 import { GoogleSignIn } from "@/components/google-signin";
 import { auth, isFirebaseConfigured } from "@/lib/firebase/client";
-import { listOwnerShops } from "@/lib/firebase/firestore";
+import { listOwnerShops, updateShopDetails } from "@/lib/firebase/firestore";
 import { useAuth } from "@/lib/use-auth";
 import type { Shop } from "@/lib/types";
 
@@ -18,6 +18,7 @@ export default function OwnerPage() {
   const [email, setEmail] = useState("owner@airloo.in");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [openSensors, setOpenSensors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     document.title = "Owner Console | AirLoo";
@@ -118,42 +119,78 @@ export default function OwnerPage() {
         {shops.length === 0 ? (
           <p className="toast">No shops found for this account.</p>
         ) : (
-          shops.map((shop) => (
-            <article className="management-card" key={shop.id}>
-              <div className="card-row">
-                <div>
-                  <h2>{shop.name}</h2>
-                  <p>{shop.address}</p>
+          shops.map((shop) => {
+            const sensor = shop.sensors[0];
+            return (
+              <article className="management-card" key={shop.id}>
+                <div className="card-row">
+                  <div>
+                    <h2>{shop.name}</h2>
+                    <p>{shop.address}</p>
+                  </div>
+                  <StatusPill status={shop.status} />
                 </div>
-                <StatusPill status={shop.status} />
-              </div>
-              <SensorGrid reading={shop.sensors[0]} />
-              <form
-                className="inline-edit"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setMessage("Saved locally. Connect Firebase env values to persist shop CRUD.");
-                }}
-              >
-                <label>
-                  Shop name
-                  <input defaultValue={shop.name} />
-                </label>
-                <label>
-                  Address
-                  <input defaultValue={shop.address} />
-                </label>
-                <button className="primary-button" type="submit">
-                  <Save size={17} />
-                  Save details
-                </button>
-                <button className="ghost-button" type="button">
-                  <Edit3 size={17} />
-                  Sensors
-                </button>
-              </form>
-            </article>
-          ))
+                {sensor ? <SensorGrid reading={sensor} /> : <p className="toast">No sensors linked to this shop yet.</p>}
+                {openSensors[shop.id] && sensor ? (
+                  <div className="sensor-detail-panel">
+                    <dl>
+                      <div>
+                        <dt>Device ID</dt>
+                        <dd>{sensor.deviceId}</dd>
+                      </div>
+                      <div>
+                        <dt>Door cycles</dt>
+                        <dd>
+                          {sensor.openCount} opens / {sensor.closeCount} closes
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Last event</dt>
+                        <dd>{new Date(sensor.lastEventAt).toLocaleString("en-IN")}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                ) : null}
+                <form
+                  className="inline-edit"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    const formData = new FormData(event.currentTarget);
+                    const name = String(formData.get("name") ?? shop.name);
+                    const address = String(formData.get("address") ?? shop.address);
+                    setShops((currentShops) =>
+                      currentShops.map((currentShop) =>
+                        currentShop.id === shop.id ? { ...currentShop, name, address } : currentShop,
+                      ),
+                    );
+                    await updateShopDetails(shop.id, { name, address });
+                    setMessage("Shop details saved.");
+                  }}
+                >
+                  <label>
+                    Shop name
+                    <input name="name" defaultValue={shop.name} />
+                  </label>
+                  <label>
+                    Address
+                    <input name="address" defaultValue={shop.address} />
+                  </label>
+                  <button className="primary-button" type="submit">
+                    <Save size={17} />
+                    Save details
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => setOpenSensors((current) => ({ ...current, [shop.id]: !current[shop.id] }))}
+                  >
+                    <Edit3 size={17} />
+                    {openSensors[shop.id] ? "Hide sensors" : "Sensors"}
+                  </button>
+                </form>
+              </article>
+            );
+          })
         )}
       </div>
       {message ? <p className="toast">{message}</p> : null}

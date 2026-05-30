@@ -41,6 +41,11 @@ textarea {
   font: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .top-nav {
   align-items: center;
   background: rgba(245, 247, 242, 0.92);
@@ -462,7 +467,8 @@ dd {
 }
 
 .stack-form label,
-.inline-edit label {
+.inline-edit label,
+.shop-add-form label {
   background: var(--panel-soft);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -526,6 +532,13 @@ dd {
 .inline-edit {
   align-items: end;
   grid-template-columns: 1fr 1fr auto auto;
+}
+
+.sensor-detail-panel {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .session-bar {
@@ -808,6 +821,16 @@ dd {
   padding: 0 12px;
 }
 
+.admin-select {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  max-width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
 .admin-badge {
   border-radius: 999px;
   display: inline-flex;
@@ -886,6 +909,24 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.shop-add-form {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 16px;
+}
+
+.shop-add-form input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  outline: 0;
+  width: 100%;
+}
+
 .table-card {
   overflow-x: auto;
 }
@@ -925,18 +966,27 @@ dd {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-overview-grid,
+  .admin-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .span-2,
+  .span-3 {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
   .user-grid,
   .interest-grid {
     grid-template-columns: 1fr;
   }
 
-  .span-2 {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 960px) {
+  .hero-band,
   .hero-band,
   .split-layout {
     grid-template-columns: 1fr;
@@ -952,7 +1002,8 @@ dd {
   }
 
   .ops-grid,
-  .analytics-strip {
+  .analytics-strip,
+  .shop-add-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -999,8 +1050,18 @@ dd {
   .stack-form.two-column,
   .ops-grid,
   .analytics-strip,
-  .interest-card dl {
+  .interest-card dl,
+  .shop-add-form {
     grid-template-columns: 1fr;
+  }
+
+  .admin-tabs {
+    flex-wrap: wrap;
+  }
+
+  .admin-tabs button {
+    flex: 1;
+    justify-content: center;
   }
 
   .hero-band {
@@ -1041,5 +1102,9 @@ dd {
 
   .management-card {
     padding: 16px;
+  }
+
+  .shop-add-form .primary-button {
+    grid-column: 1 / -1;
   }
 }

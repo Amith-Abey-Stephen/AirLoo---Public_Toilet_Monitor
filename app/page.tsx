@@ -14,6 +14,7 @@ export default function PublicSearchPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     document.title = "AirLoo | Public Toilet Monitor";
@@ -40,6 +41,31 @@ export default function PublicSearchPage() {
   }, [query, status, shops]);
 
   const totalDevices = shops.reduce((total, shop) => total + shop.sensors.length, 0);
+
+  function handleLocate() {
+    if (!navigator.geolocation) {
+      setNotice("Location is not supported on this browser. Search by area instead.");
+      return;
+    }
+
+    setNotice("Checking your location...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setShops((currentShops) =>
+          currentShops
+            .map((shop) => ({
+              ...shop,
+              distanceKm: distanceKm(latitude, longitude, shop.latitude, shop.longitude),
+            }))
+            .sort((a, b) => (a.distanceKm ?? Number.MAX_VALUE) - (b.distanceKm ?? Number.MAX_VALUE)),
+        );
+        setNotice("Sorted shops by distance from your current location.");
+      },
+      () => setNotice("Could not access location. Please allow location permission or search manually."),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  }
 
   return (
     <main>
@@ -76,7 +102,7 @@ export default function PublicSearchPage() {
               placeholder="Search shop, area, city..."
             />
           </label>
-          <button className="icon-button" type="button" title="Use my location">
+          <button className="icon-button" type="button" title="Use my location" onClick={handleLocate}>
             <LocateFixed size={19} />
           </button>
           <label className="filter-box">
@@ -89,6 +115,7 @@ export default function PublicSearchPage() {
             </select>
           </label>
         </div>
+        {notice ? <p className="toast">{notice}</p> : null}
 
         <div className="shop-grid">
           {loading
@@ -102,4 +129,21 @@ export default function PublicSearchPage() {
       </section>
     </main>
   );
+}
+
+function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(toLat - fromLat);
+  const dLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(fromLat)) *
+      Math.cos(toRadians(toLat)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
 }

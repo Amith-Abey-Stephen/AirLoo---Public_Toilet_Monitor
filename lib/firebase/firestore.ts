@@ -61,6 +61,11 @@ export async function addJoinRequest(data: JoinRequest) {
   });
 }
 
+export async function updateJoinRequestStatus(requestId: string, status: NonNullable<JoinRequest["status"]>) {
+  if (!isFirebaseConfigured || !db || !requestId) return;
+  await updateDoc(doc(db, "joinRequests", requestId), { status });
+}
+
 export async function listRecentEvents(deviceId: string) {
   if (!isFirebaseConfigured || !db) return [];
 

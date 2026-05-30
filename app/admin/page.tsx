@@ -24,9 +24,14 @@ import {
 import { StatusPill } from "@/components/status-pill";
 import { GoogleSignIn } from "@/components/google-signin";
 import { auth, isFirebaseConfigured } from "@/lib/firebase/client";
-import { listJoinRequests, listPublicShops } from "@/lib/firebase/firestore";
+import {
+  listJoinRequests,
+  listPublicShops,
+  updateJoinRequestStatus,
+  updateShopDetails,
+} from "@/lib/firebase/firestore";
 import { useAuth } from "@/lib/use-auth";
-import type { Shop } from "@/lib/types";
+import type { Shop, ShopStatus } from "@/lib/types";
 
 const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
   .split(",")
@@ -80,6 +85,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [interestRequests, setInterestRequests] = useState<InterestRequest[]>([]);
+  const [assignedAlerts, setAssignedAlerts] = useState<Record<string, boolean>>({});
+  const [adminMessage, setAdminMessage] = useState("");
   const [search, setSearch] = useState("");
   const [email, setEmail] = useState(adminEmails[0] ?? "admin@airloo.in");
   const [password, setPassword] = useState("");
@@ -94,7 +101,10 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    listPublicShops().then(setShops);
+    listPublicShops().then((loadedShops) => {
+      setShops(loadedShops);
+      setUsers(buildUsersFromShops(loadedShops));
+    });
   }, []);
 
   useEffect(() => {
@@ -121,6 +131,78 @@ export default function AdminPage() {
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await login(email, password);
+  }
+
+  function handleExport() {
+    const rows = [
+      ["Type", "Name", "Email", "Status", "Assigned", "Device", "Visits today"],
+      ...shops.map((shop) => [
+        "Shop",
+        shop.name,
+        shop.ownerEmail,
+        shop.status,
+        shop.locality,
+        shop.sensors[0]?.deviceId ?? "",
+        String(shop.sensors[0]?.sessionsToday ?? 0),
+      ]),
+      ...users.map((user) => ["User", user.name, user.email, user.status, user.assigned, "", ""]),
+      ...interestRequests.map((request) => [
+        "Interest",
+        request.shopName,
+        request.email,
+        request.status,
+        request.location,
+        "",
+        "",
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "airloo-admin-export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setAdminMessage("Export downloaded.");
+  }
+
+  function handleInviteUser() {
+    const inviteNumber = users.length + 1;
+    setUsers((currentUsers) => [
+      {
+        id: `invite-${inviteNumber}`,
+        name: `Invited user ${inviteNumber}`,
+        email: `invite-${inviteNumber}@airloo.in`,
+        role: "Viewer",
+        status: "Invited",
+        assigned: "Pending assignment",
+        lastSeen: "Invite pending",
+      },
+      ...currentUsers,
+    ]);
+    setAdminMessage("User invite created locally. Connect Firebase user claims to persist roles.");
+  }
+
+  async function handleAddShop(shop: Shop) {
+    setShops((currentShops) => [shop, ...currentShops]);
+    setActiveTab("shops");
+    setAdminMessage("Shop added locally. Connect a Firestore create helper to persist new shops.");
+  }
+
+  async function handleShopStatusChange(shopId: string, status: ShopStatus) {
+    setShops((currentShops) =>
+      currentShops.map((shop) => (shop.id === shopId ? { ...shop, status } : shop)),
+    );
+    await updateShopDetails(shopId, { status });
+    setAdminMessage("Shop status updated.");
+  }
+
+  async function handleInterestStatusChange(requestId: string, status: InterestRequest["status"]) {
+    setInterestRequests((currentRequests) =>
+      currentRequests.map((request) => (request.id === requestId ? { ...request, status } : request)),
+    );
+    await updateJoinRequestStatus(requestId, status.toLowerCase() as "new" | "reviewing" | "approved" | "rejected");
+    setAdminMessage("Interest form status updated.");
   }
 
   if (session.status === "loading") {
@@ -241,11 +323,11 @@ export default function AdminPage() {
           <p>System-wide visibility for all public locations and sensor streams.</p>
         </div>
         <div className="button-row">
-          <button className="ghost-button" type="button">
+          <button className="ghost-button" type="button" onClick={handleExport}>
             <Download size={18} />
             Export
           </button>
-          <button className="primary-button" type="button">
+          <button className="primary-button" type="button" onClick={() => setActiveTab("shops")}>
             <Plus size={18} />
             Add shop
           </button>
@@ -255,6 +337,7 @@ export default function AdminPage() {
           </button>
         </div>
       </section>
+      {adminMessage ? <p className="toast">{adminMessage}</p> : null}
 
       <section className="admin-tabs" aria-label="Admin sections">
         {adminTabs.map((tab) => {
@@ -316,6 +399,7 @@ export default function AdminPage() {
       {activeTab === "users" ? (
         <UsersPanel
           users={filteredUsers}
+          onInvite={handleInviteUser}
           onRoleChange={(userId, role) =>
             setUsers((currentUsers) =>
               currentUsers.map((user) => (user.id === userId ? { ...user, role } : user)),
@@ -351,17 +435,24 @@ export default function AdminPage() {
               .toLowerCase()
               .includes(search.toLowerCase()),
           )}
-          onStatusChange={(requestId, status) =>
-            setInterestRequests((currentRequests) =>
-              currentRequests.map((request) => (request.id === requestId ? { ...request, status } : request)),
-            )
-          }
+          onStatusChange={handleInterestStatusChange}
         />
       ) : null}
 
-      {activeTab === "shops" ? <ShopsPanel shops={filteredShops} /> : null}
+      {activeTab === "shops" ? (
+        <ShopsPanel shops={filteredShops} onAddShop={handleAddShop} onStatusChange={handleShopStatusChange} />
+      ) : null}
 
-      {activeTab === "alerts" ? <AlertsPanel alerts={alerts} /> : null}
+      {activeTab === "alerts" ? (
+        <AlertsPanel
+          alerts={alerts}
+          assignedAlerts={assignedAlerts}
+          onAssign={(alertId) => {
+            setAssignedAlerts((current) => ({ ...current, [alertId]: true }));
+            setAdminMessage("Alert assigned to the field team.");
+          }}
+        />
+      ) : null}
     </main>
   );
 }
@@ -445,10 +536,12 @@ function OverviewPanel({
 }
 
 function UsersPanel({
+  onInvite,
   onRoleChange,
   onStatusToggle,
   users,
 }: {
+  onInvite: () => void;
   onRoleChange: (userId: string, role: AdminUser["role"]) => void;
   onStatusToggle: (userId: string) => void;
   users: AdminUser[];
@@ -460,13 +553,13 @@ function UsersPanel({
           <span className="eyebrow">Access control</span>
           <h2>Manage admins, owners, cleaners, and viewers</h2>
         </div>
-        <button className="primary-button" type="button">
+        <button className="primary-button" type="button" onClick={onInvite}>
           <UserCog size={17} />
           Invite user
         </button>
       </div>
       <div className="user-grid">
-        {users.map((user) => (
+        {users.length ? users.map((user) => (
           <article className="user-card" key={user.id}>
             <div>
               <h3>{user.name}</h3>
@@ -489,7 +582,7 @@ function UsersPanel({
             </div>
             <span className={`admin-badge ${user.status.toLowerCase()}`}>{user.status}</span>
           </article>
-        ))}
+        )) : <p className="empty-state">No users match this search.</p>}
       </div>
     </section>
   );
@@ -575,7 +668,7 @@ function InterestPanel({
         <Mail size={22} />
       </div>
       <div className="interest-grid">
-        {requests.map((request) => (
+        {requests.length ? requests.map((request) => (
           <article className="interest-card" key={request.id}>
             <div className="card-row">
               <div>
@@ -614,13 +707,23 @@ function InterestPanel({
               </button>
             </div>
           </article>
-        ))}
+        )) : <p className="empty-state">No interest forms match this search.</p>}
       </div>
     </section>
   );
 }
 
-function ShopsPanel({ shops }: { shops: Shop[] }) {
+function ShopsPanel({
+  onAddShop,
+  onStatusChange,
+  shops,
+}: {
+  onAddShop: (shop: Shop) => void;
+  onStatusChange: (shopId: string, status: ShopStatus) => void;
+  shops: Shop[];
+}) {
+  const [showForm, setShowForm] = useState(false);
+
   return (
     <section className="admin-panel">
       <div className="panel-title">
@@ -628,14 +731,26 @@ function ShopsPanel({ shops }: { shops: Shop[] }) {
           <span className="eyebrow">Inventory</span>
           <h2>Shops and device registry</h2>
         </div>
-        <Store size={22} />
+        <button className="primary-button" type="button" onClick={() => setShowForm((open) => !open)}>
+          <Plus size={17} />
+          {showForm ? "Close form" : "Add shop"}
+        </button>
       </div>
-      <AdminShopTable shops={shops} />
+      {showForm ? <AddShopForm onAddShop={onAddShop} /> : null}
+      <AdminShopTable shops={shops} onStatusChange={onStatusChange} />
     </section>
   );
 }
 
-function AlertsPanel({ alerts }: { alerts: ReturnType<typeof buildAlerts> }) {
+function AlertsPanel({
+  alerts,
+  assignedAlerts,
+  onAssign,
+}: {
+  alerts: ReturnType<typeof buildAlerts>;
+  assignedAlerts: Record<string, boolean>;
+  onAssign: (alertId: string) => void;
+}) {
   return (
     <section className="admin-panel">
       <div className="panel-title">
@@ -652,8 +767,8 @@ function AlertsPanel({ alerts }: { alerts: ReturnType<typeof buildAlerts> }) {
               <strong>{alert.title}</strong>
               <span>{alert.body}</span>
             </div>
-            <button className="ghost-button" type="button">
-              Assign
+            <button className="ghost-button" type="button" onClick={() => onAssign(alert.id)} disabled={assignedAlerts[alert.id]}>
+              {assignedAlerts[alert.id] ? "Assigned" : "Assign"}
             </button>
           </article>
         ))}
@@ -662,7 +777,13 @@ function AlertsPanel({ alerts }: { alerts: ReturnType<typeof buildAlerts> }) {
   );
 }
 
-function AdminShopTable({ shops }: { shops: Shop[] }) {
+function AdminShopTable({
+  onStatusChange,
+  shops,
+}: {
+  onStatusChange?: (shopId: string, status: ShopStatus) => void;
+  shops: Shop[];
+}) {
   return (
     <div className="table-card compact-table">
       <div className="table-row table-head">
@@ -677,7 +798,20 @@ function AdminShopTable({ shops }: { shops: Shop[] }) {
           <span>{shop.name}</span>
           <span>{shop.ownerEmail}</span>
           <span>
-            <StatusPill status={shop.status} />
+            {onStatusChange ? (
+              <select
+                className="admin-select"
+                value={shop.status}
+                onChange={(event) => onStatusChange(shop.id, event.target.value as ShopStatus)}
+              >
+                <option value="healthy">Healthy</option>
+                <option value="needs-cleaning">Needs cleaning</option>
+                <option value="offline">Offline</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            ) : (
+              <StatusPill status={shop.status} />
+            )}
           </span>
           <span>{shop.sensors[0]?.deviceId ?? "--"}</span>
           <span>{shop.sensors[0]?.sessionsToday ?? 0} visits</span>
@@ -685,6 +819,79 @@ function AdminShopTable({ shops }: { shops: Shop[] }) {
       ))}
       {!shops.length ? <p className="empty-state">No matching shops found. Add shops in Firestore to populate this list.</p> : null}
     </div>
+  );
+}
+
+function AddShopForm({ onAddShop }: { onAddShop: (shop: Shop) => void }) {
+  return (
+    <form
+      className="shop-add-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const name = String(formData.get("name") ?? "").trim();
+        const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
+        const address = String(formData.get("address") ?? "").trim();
+        const locality = String(formData.get("locality") ?? "").trim();
+
+        if (!name || !ownerEmail || !address || !locality) return;
+
+        onAddShop({
+          id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+          name,
+          ownerName: ownerEmail.split("@")[0] ?? "Owner",
+          ownerEmail,
+          category: String(formData.get("category") ?? "Shop"),
+          address,
+          locality,
+          city: String(formData.get("city") ?? "Coimbatore"),
+          latitude: Number(formData.get("latitude") ?? 0),
+          longitude: Number(formData.get("longitude") ?? 0),
+          status: "healthy",
+          rating: 4,
+          facilities: ["Public toilet"],
+          sensors: [],
+        });
+        event.currentTarget.reset();
+      }}
+    >
+      <label>
+        Shop name
+        <input name="name" required />
+      </label>
+      <label>
+        Owner email
+        <input name="ownerEmail" type="email" required />
+      </label>
+      <label>
+        Category
+        <input name="category" defaultValue="Shop" />
+      </label>
+      <label>
+        Locality
+        <input name="locality" required />
+      </label>
+      <label className="full-span">
+        Address
+        <input name="address" required />
+      </label>
+      <label>
+        City
+        <input name="city" defaultValue="Coimbatore" />
+      </label>
+      <label>
+        Latitude
+        <input name="latitude" type="number" step="any" defaultValue="0" />
+      </label>
+      <label>
+        Longitude
+        <input name="longitude" type="number" step="any" defaultValue="0" />
+      </label>
+      <button className="primary-button" type="submit">
+        <Plus size={17} />
+        Add shop
+      </button>
+    </form>
   );
 }
 
@@ -758,6 +965,41 @@ function toInterestStatus(status: unknown): InterestRequest["status"] {
   if (status === "rejected") return "Rejected";
   if (status === "reviewing") return "Reviewing";
   return "New";
+}
+
+function buildUsersFromShops(shops: Shop[]): AdminUser[] {
+  const owners = new Map<string, AdminUser>();
+
+  shops.forEach((shop) => {
+    if (!shop.ownerEmail) return;
+    owners.set(shop.ownerEmail, {
+      id: shop.ownerEmail,
+      name: shop.ownerName || shop.ownerEmail.split("@")[0] || "Shop owner",
+      email: shop.ownerEmail,
+      role: "Owner",
+      status: "Active",
+      assigned: shop.name,
+      lastSeen: shop.sensors[0]?.lastEventAt
+        ? new Date(shop.sensors[0].lastEventAt).toLocaleString("en-IN")
+        : "No sensor activity",
+    });
+  });
+
+  const admins = adminEmails.map((email) => ({
+    id: email,
+    name: email.split("@")[0] || "Admin",
+    email,
+    role: "Admin" as const,
+    status: "Active" as const,
+    assigned: "All locations",
+    lastSeen: "Current session",
+  }));
+
+  return [...admins, ...owners.values()];
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function average(values: number[]) {
